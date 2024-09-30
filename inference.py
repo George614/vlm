@@ -91,6 +91,8 @@ def test_inference(
     generated_tokens = torch.cat(generated_tokens, dim=-1)
     # decode the generated tokens
     decoded = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+    
+    print(prompt + decoded)
 
 
 def main(
@@ -131,5 +133,6 @@ def main(
             top_p,
             do_sample,
         )
-    output_text = processor.decode_text(output[0])
-    print(output_text)
+
+if __name__ == "__main__":
+    fire.Fire(main)
