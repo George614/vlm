@@ -14,6 +14,21 @@ def repeat_kv(hidden_states: torch.Tensor, num_rep: int) -> torch.Tensor:
     hidden_states = hidden_states[:, :, None, :, :].expand(bs, num_key_value_heads, num_rep, seq_length, head_dim)
     return hidden_states.reshape(bs, num_key_value_heads * num_rep, seq_length, head_dim)
 
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    # build the [-x2, x1, -x4, x3, ...] tensor for the sin part of the positional encoding
+    # NOTE this is different from the paper due to the permutation done by huggingface on Wq, Wk
+    x1 = x[..., :x.shape[-1] // 2] # first half
+    x2 = x[..., x.shape[-1] // 2:] # second half
+    return torch.cat([-x2, x1], dim=-1)
+
+
+def apply_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=1):
+    cos = cos.unsqueeze(unsqueeze_dim)  # add head dimension
+    sin = sin.unsqueeze(unsqueeze_dim)
+    # apply the formula (34) from the rotary positional encodings paper https://arxiv.org/pdf/2104.09864
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
 
 class GemmaConfig:
         
@@ -125,6 +140,40 @@ class GemmaRMSNorm(nn.Module):
         output = output * (1.0 + self.scale.float())
         return output.type_as(x)
 
+
+class GemmaRotaryEmbedding(nn.Module):
+    
+    def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
+        super().__init__()
+        self.dim = dim  # this is set to the head_dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        self.device = device
+        # calculate theta according to the formula theta_i = base^(2i/dim) where i = 0, 1, 2, ..., dim // 2
+        inv_freq = 1.0 / torch.pow(self.base, torch.arange(0, self.dim, 2, device=torch.int64).float() / self.dim)
+        self.register_buffer("inv_freq", tensor=inv_freq, persistent=False)
+
+    def forward(self, x, position_ids, seq_len=None):
+        # x shape [batch_size, num_heads, seq_length, head_dim]
+        self.inv_freq.to(x.device)
+        # inv_freq_expanded shape [batch_size,  head_dim // 2, 1]
+        inv_freq_expanded  = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, -1)
+        # position_ids_expanded shape [batch_size, 1, seq_length]
+        position_ids_expanded = position_ids[:, None, :].float()
+        device_type = x.device.type
+        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
+        with torch.autocast(device_type=device_type, enabled=False):  # we want to retain the full precision here
+            # mutliply each theta by the position (which is the argument of the sin and cos functions)
+            # freqs shape [batch_size, head_dim // 2, 1]  @ [batch_size, 1, seq_length] -> [batch_size, seq_length, head_dim // 2]
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
+            # embed shape [batch_size, seq_length, head_dim]
+            # NOTE this concatenation implementation is different from the paper due to the permutation done
+            # by huggingface.
+            embed = torch.cat([freqs, freqs], dim=-1)
+            cos = embed.cos()
+            sin = embed.sin()
+        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
+            
 
 class GemmaMLP(nn.Module):
         
