@@ -1,8 +1,8 @@
 #!/bin/bash
 
 MODEL_PATH="$HOME/Projects/paligemma-weights/paligemma-3b-pt-224"
-PROMPT="describe the image "
-IMAGE_FILE_PATH="test_images/lake.jpg"
+PROMPT="the building is "
+IMAGE_FILE_PATH="test_images/Chrysler_building.jpg"
 MAX_TOKENS_TO_GENERATE=100
 TEMPERATURE=0.8
 TOP_P=0.9

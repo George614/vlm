@@ -8,7 +8,7 @@ from modeling_siglip import SiglipVisionConfig, SiglipVisionModel
 
 
 def repeat_kv(hidden_states: torch.Tensor, num_rep: int) -> torch.Tensor:
-    bs, num_key_value_heads, seq_length, head_dim = hidden_states.size()
+    bs, num_key_value_heads, seq_length, head_dim = hidden_states.shape
     if num_rep == 1:
         return hidden_states
     hidden_states = hidden_states[:, :, None, :, :].expand(bs, num_key_value_heads, num_rep, seq_length, head_dim)
@@ -91,7 +91,7 @@ class PaliGemmaConfig:
         self.text_config = GemmaConfig(**text_config, pad_token_id=pad_token_id)
         
         self.vocab_size = self.text_config.vocab_size
-        self.text_config.num_image_tokens = (self.vision_config.image_size // self.vision_config.patch_size) ** 2 + 1
+        self.text_config.num_image_tokens = (self.vision_config.image_size // self.vision_config.patch_size) ** 2
         self.vision_config.projection_dim = self.projection_dim   
 
 
@@ -153,6 +153,7 @@ class GemmaRotaryEmbedding(nn.Module):
         inv_freq = 1.0 / torch.pow(self.base, torch.arange(0, self.dim, 2, dtype=torch.int64).float() / self.dim)
         self.register_buffer("inv_freq", tensor=inv_freq, persistent=False)
 
+    @torch.no_grad()
     def forward(self, x, position_ids, seq_len=None):
         # x shape [batch_size, num_heads, seq_length, head_dim]
         self.inv_freq.to(x.device)
@@ -463,8 +464,6 @@ class PaliGemmaForConditionalGeneration(nn.Module):
         final_embedding = torch.where(pad_mask, torch.zeros_like(final_embedding), final_embedding)
         
         ## create the attention mask ##
-        dtype, device = inputs_embeds.dtype, inputs_embeds.device
-        min_dtype = torch.finfo(dtype).min
         q_len = inputs_embeds.shape[1]
         
         if kv_cache is None or kv_cache.num_items() == 0:

@@ -55,7 +55,7 @@ class SiglipVisionEmbeddings(nn.Module):
         self.position_embedding = nn.Embedding(self.num_positions, self.embed_dim)
         self.register_buffer(  # fixed embeddings
             "position_ids",
-            torch.arange(self.num_positions),
+            torch.arange(self.num_positions).expand((1, -1)),
             persistent=False,
         )
     
@@ -84,7 +84,7 @@ class SiglipMLP(nn.Module):
     def forward(self, hidden_states: torch.FloatTensor) -> torch.FloatTensor:
         # (B, num_patches, embed_dim) -> (B, num_patches, intermediate_size)
         hidden_states = self.fc1(hidden_states)
-        hidden_states = F.gelu(hidden_states)
+        hidden_states = F.gelu(hidden_states, approximate="tanh")
         # (B, num_patches, intermediate_size) -> (B, num_patches, embed_dim)
         hidden_states = self.fc2(hidden_states)
         return hidden_states
