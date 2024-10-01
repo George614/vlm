@@ -48,7 +48,7 @@ def test_inference(
     device: str,
     prompt: str,
     image_path: str,
-    max_token_to_generate: int,
+    max_tokens_to_generate: int,
     temperature: float,
     top_p: float,
     do_sample: bool,
@@ -62,7 +62,7 @@ def test_inference(
     stop_token = processor.tokenizer.eos_token_id
     generated_tokens = []
     
-    for _ in range(max_token_to_generate):
+    for _ in range(max_tokens_to_generate):
         outputs = model(
             input_ids=input_ids,
             pixel_values=pixel_values,
@@ -70,7 +70,7 @@ def test_inference(
             kv_cache=kv_cache,
         )
         kv_cache = outputs["kv_cache"]
-        next_token_logits = outputs["logtis"][:, -1, :]  # take the last logit along the sequence axis
+        next_token_logits = outputs["logits"][:, -1, :]  # take the last logit along the sequence axis
         
         if do_sample:
             # apply tempeature and top-p sampling
@@ -81,7 +81,7 @@ def test_inference(
         assert next_token.size() == (1, 1)
         next_token = next_token.squeeze(0)  # remove the batch dimension
         generated_tokens.append(next_token)
-        if next_token == stop_token:
+        if next_token.item() == stop_token:
             break
         input_ids = next_token.unsqueeze(-1)
         attention_mask = torch.cat(  # attened to all previous tokens
@@ -99,7 +99,7 @@ def main(
     model_path: str = None,
     prompt: str = 'A beautiful sunset over the mountains',
     image_path: str = None,
-    max_token_to_generate: int = 100,
+    max_tokens_to_generate: int = 100,
     temperature: float = 0.8,
     top_p: float = 0.9,
     do_sample: bool = False,
@@ -128,7 +128,7 @@ def main(
             device,
             prompt,
             image_path,
-            max_token_to_generate,
+            max_tokens_to_generate,
             temperature,
             top_p,
             do_sample,

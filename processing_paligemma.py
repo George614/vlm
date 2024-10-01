@@ -52,7 +52,7 @@ def process_images(
     ]
     images = [np.array(image) for image in images]
     # rescale pixel values to be in range [0, 1]
-    images = [rescale(image, scale=rescale_factor, resample=resample) for image in images]
+    images = [rescale(image, scale=rescale_factor) for image in images]
     # standardize the images
     images = [normalize(image, mean=image_mean, std=image_std) for image in images]
     # move the channel dimension to the first dimension since model expects inputs with shape [C, H, W]

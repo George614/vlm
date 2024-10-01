@@ -34,12 +34,12 @@ class GemmaConfig:
         
     def __init__(
         self,
-        vocab_size: int = 256000,
-        hidden_size: int = 2048,
-        intermediate_size: int = 8192,
-        num_hidden_layers: int = 12,
-        num_attention_heads: int = 16,  # for query
-        num_key_value_heads: int = 4,
+        vocab_size: int,
+        hidden_size: int,
+        intermediate_size: int,
+        num_hidden_layers: int,
+        num_attention_heads: int,  # for query
+        num_key_value_heads: int,
         head_dim: int = 256,
         max_position_embeddings: int = 8192,
         rms_norm_eps: float = 1e-6,
@@ -68,8 +68,8 @@ class PaliGemmaConfig:
     
     def __init__(
         self,
-        vision_config: SiglipVisionConfig = None,
-        text_config: GemmaConfig = None,
+        vision_config = None,
+        text_config = None,
         ignore_index: int = -100,
         image_token_index: int = 256000,
         vocab_size: int = 257152,
@@ -92,7 +92,7 @@ class PaliGemmaConfig:
         
         self.vocab_size = self.text_config.vocab_size
         self.text_config.num_image_tokens = (self.vision_config.image_size // self.vision_config.patch_size) ** 2 + 1
-        self.vision_config.projeciton_dim = self.projection_dim   
+        self.vision_config.projection_dim = self.projection_dim   
 
 
 class KVCache:
@@ -150,7 +150,7 @@ class GemmaRotaryEmbedding(nn.Module):
         self.base = base
         self.device = device
         # calculate theta according to the formula theta_i = base^(2i/dim) where i = 0, 1, 2, ..., dim // 2
-        inv_freq = 1.0 / torch.pow(self.base, torch.arange(0, self.dim, 2, device=torch.int64).float() / self.dim)
+        inv_freq = 1.0 / torch.pow(self.base, torch.arange(0, self.dim, 2, dtype=torch.int64).float() / self.dim)
         self.register_buffer("inv_freq", tensor=inv_freq, persistent=False)
 
     def forward(self, x, position_ids, seq_len=None):
@@ -494,7 +494,7 @@ class PaliGemmaForConditionalGeneration(nn.Module):
         else:
             # create a position_ids based on the size of the attention_mask
             # for masked tokens, use the number 1 as position
-            position_ids = (attention_mask.cumsum(dim=-1)).masked_fill(~attention_mask, 1).to(device)
+            position_ids = (attention_mask.cumsum(dim=-1)).masked_fill((attention_mask == 0), 1).to(device)
             
         return final_embedding, causal_mask, position_ids
             
@@ -506,6 +506,7 @@ class PaliGemmaForConditionalGeneration(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
         kv_cache: Optional[KVCache] = None,
     ) -> Tuple:
+        # Make sure the input is right-padded
         assert torch.all(attention_mask == 1), "The input cannot be padded"
 
         # extract the input embeddings
